@@ -164,3 +164,5 @@ things with the conf module you should manage your own locking when making any c
 changes. Since most config are loaded from the filesystem, generally this means that
 any changes to the runtime overrides should be done under a lock.
 
+[![Coverage Status](https://coveralls.io/repos/seandst/yaycl/badge.svg?branch=master)](https://coveralls.io/r/seandst/yaycl?branch=master)
+[![Build Status](https://travis-ci.org/seandst/yaycl.svg?branch=master)](https://travis-ci.org/seandst/yaycl)
