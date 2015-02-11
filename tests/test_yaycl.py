@@ -1,6 +1,8 @@
+import importlib
 import os
 import random
 import string
+import sys
 from warnings import catch_warnings, resetwarnings
 
 import pytest
@@ -9,10 +11,10 @@ from lya import AttrDict
 from yaycl import Config, ConfigTree, ConfigNotFound, ConfigInvalid
 
 test_yaml_contents = '''
-test_key: test_value
+test_key: test value
 nested_test_root:
-    nested_test_key_1: nested_test_value_1
-    nested_test_key_2: nested_test_value_2
+    nested_test_key_1: nested_test value_1
+    nested_test_key_2: nested_test value_2
 inherit_value:
     inherit: nested_test_root
     inherit_nested_value:
@@ -20,9 +22,9 @@ inherit_value:
 '''
 
 local_test_yaml_contents = '''
-test_key: test_overridden_value
+test_key: test overridden value
 nested_test_root:
-    nested_test_key_1: overridden_nested_test_value
+    nested_test_key_1: overridden_nested_test value
 '''
 
 invalid_test_yaml_contents = '''
@@ -87,7 +89,7 @@ def delete_path(path):
 
 def test_conf_basics(test_yaml, conf):
     # Dict lookup method works
-    assert conf[test_yaml]['test_key'] == 'test_value'
+    assert conf[test_yaml]['test_key'] == 'test value'
     assert isinstance(conf, Config)
     assert isinstance(conf.runtime, ConfigTree)
     assert isinstance(conf[test_yaml], AttrDict)
@@ -109,36 +111,33 @@ def test_conf_yamls_item(test_yaml, conf):
 
 def test_conf_yamls_attr(test_yaml, conf):
     # Attribute lookup method works
-    assert getattr(conf, test_yaml)['test_key'] == 'test_value'
+    assert getattr(conf, test_yaml)['test_key'] == 'test value'
 
 
 def test_conf_yamls_save(request, test_yaml, conf):
     save_test = conf_dir(request).join('{}.yaml'.format('save_test'))
     request.addfinalizer(lambda: delete_path(save_test))
-    with create_test_yaml(request, conf, local_test_yaml_contents, test_yaml):
-        assert not save_test.check()
-        conf['save_test'].update(conf[test_yaml])
-        conf.save('save_test')
-        del(conf['save_test'])
-        assert save_test.check
-        assert sorted(conf['save_test']) == sorted(conf[test_yaml])
+    create_test_yaml(request, conf, local_test_yaml_contents, test_yaml)
+
+    assert not save_test.check()
+    conf['save_test'].update(conf[test_yaml])
+    conf.save('save_test')
+    del(conf['save_test'])
+    assert save_test.check
+    assert sorted(conf['save_test']) == sorted(conf[test_yaml])
 
 
 def test_conf_yamls_override(request, test_yaml, conf):
     # Make a .local.yaml file with the same root name as test_yaml,
-    with create_test_yaml(request, conf, local_test_yaml_contents, test_yaml, local=True):
-        # Check that the simple local override works.
-        assert conf[test_yaml]['test_key'] == 'test_overridden_value'
+    create_test_yaml(request, conf, local_test_yaml_contents, test_yaml, local=True)
 
-        # Check that the local override of specific nested keys works.
-        nested_root = conf[test_yaml]['nested_test_root']
-        assert nested_root['nested_test_key_1'] == 'overridden_nested_test_value'
-        assert nested_root['nested_test_key_2'] == 'nested_test_value_2'
+    # Check that the simple local override works.
+    assert conf[test_yaml]['test_key'] == 'test overridden value'
 
-
-def test_conf_yamls_import(test_yaml, conf):
-    # Emulate from conf import $test_yaml
-    assert getattr(conf, test_yaml) == conf[test_yaml]
+    # Check that the local override of specific nested keys works.
+    nested_root = conf[test_yaml]['nested_test_root']
+    assert nested_root['nested_test_key_1'] == 'overridden_nested_test value'
+    assert nested_root['nested_test_key_2'] == 'nested_test value_2'
 
 
 def test_conf_yamls_not_found(random_string, conf, recwarn):
@@ -189,14 +188,14 @@ def test_conf_runtime_clear(test_yaml, random_string, conf):
     conf.runtime[test_yaml]['test_key'] = random_string
     assert conf[test_yaml]['test_key'] == random_string
     conf.runtime.clear()
-    assert conf[test_yaml]['test_key'] == 'test_value'
+    assert conf[test_yaml]['test_key'] == 'test value'
 
 
 def test_conf_runtime_del(test_yaml, random_string, conf):
     conf.runtime[test_yaml]['test_key'] = random_string
     assert conf[test_yaml]['test_key'] == random_string
     del(conf.runtime)
-    assert conf[test_yaml]['test_key'] == 'test_value'
+    assert conf[test_yaml]['test_key'] == 'test value'
 
 
 def test_conf_imported_attr(test_yaml, random_string, conf):
@@ -216,25 +215,38 @@ def test_conf_override_before_import(test_yaml, random_string, conf):
 
 
 def test_conf_load_invalid_yaml(request, test_yaml, random_string, conf, recwarn):
+    create_test_yaml(request, conf, invalid_test_yaml_contents, test_yaml, local=True)
     resetwarnings()
-    with create_test_yaml(request, conf, invalid_test_yaml_contents, test_yaml, local=True):
-        conf[test_yaml]
-        assert recwarn.pop(ConfigInvalid)
+
+    conf[test_yaml]
+    assert recwarn.pop(ConfigInvalid)
 
 
 def test_inheritance(request, test_yaml, conf):
-    with create_test_yaml(request, conf, local_test_yaml_contents, test_yaml, local=True):
-        # Check that nested iheritance (and thus inheritance itself) works
-        assert (conf[test_yaml].nested_test_root ==
-            conf[test_yaml].inherit_value.inherit_nested_value)
+    create_test_yaml(request, conf, local_test_yaml_contents, test_yaml, local=True)
+
+    # Check that nested iheritance (and thus inheritance itself) works
+    assert (conf[test_yaml].nested_test_root ==
+        conf[test_yaml].inherit_value.inherit_nested_value)
 
 
-def test_impersonate_module(request, test_yaml, conf):
-    import importlib
-    import sys
-    with create_test_yaml(request, conf, local_test_yaml_contents, test_yaml, local=True):
-        # put our module-to-be in sys.modules
-        sys.modules['conf'] = conf
-        # simulate 'from conf import test_yaml'
-        conf_module = importlib.import_module('conf')
-        assert getattr(conf_module, test_yaml)
+def test_impersonate_module(request, conf):
+    sys.modules['conf'] = conf
+    request.addfinalizer(lambda: sys.modules.pop('conf', None))
+
+    create_test_yaml(request, conf, test_yaml_contents, 'test_yaml')
+
+    from conf import test_yaml
+    assert test_yaml.test_key == 'test value'
+
+
+def test_conf_yamls_import_multiple(request, conf):
+    sys.modules['conf'] = conf
+    request.addfinalizer(lambda: sys.modules.pop('conf', None))
+
+    create_test_yaml(request, conf, test_yaml_contents, 'test_yaml_1')
+    create_test_yaml(request, conf, local_test_yaml_contents, 'test_yaml_2')
+
+    from conf import test_yaml_1, test_yaml_2
+    assert test_yaml_1.test_key == 'test value'
+    assert test_yaml_2.test_key == 'test overridden value'
