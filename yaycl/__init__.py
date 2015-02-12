@@ -18,6 +18,10 @@ class ConfigInvalid(UserWarning):
     pass
 
 
+class InvalidInheritPath(UserWarning):
+    pass
+
+
 class Config(dict):
     """Configuration YAML loader and cache"""
     def __init__(self, config_dir, **kwargs):
@@ -83,7 +87,7 @@ class Config(dict):
         self[key].clear()
         self._populate(key)
 
-    def _inherit(self, conf_key, root=None):
+    def _inherit(self, conf_key):
         """Recurses through an object looking for 'inherit' clauses and replaces them with their
         real counterparts. In the case of a dict, the inherit clause remains, in the case of
         anything else, a replacement occurs such that:
@@ -112,25 +116,42 @@ class Config(dict):
                   - tag1
                   - tag2
         """
-        if root is None:
-            # start at the named conf root if no root is set
+        for keys in self._needs_inherit(conf_key):
+            # get the dict containing inherit key
+            keys, root_key = keys[:-1], keys[-1]
             root = self[conf_key]
+            for k in keys:
+                root = root[k]
 
-        for key, value in root.items():
-            if key == 'inherit':
-                del(root['inherit'])
-                self._tree_set(conf_key, root, value)
+            # find the dict we're inheriting based on value
+            base = self[conf_key]
             try:
-                self._inherit(conf_key, value)
-            except AttributeError:
-                pass
+                for path_element in root[root_key]['inherit'].split('/'):
+                    base = base[path_element]
+            except KeyError:
+                warn('{} path cannot be traversed, {} does not exist'.format(
+                    root[root_key]['inherit'], path_element), InvalidInheritPath)
 
-    def _tree_set(self, conf_key, root, path):
-        base = self[conf_key]
-        for path_element in path.split('/'):
-            base = base[path_element]
-        root.rebase(base)
-        self._inherit(conf_key, root)
+            # rebase if the base was an attrdict,
+            # otherwise overwrite the key in-place
+            if isinstance(base, AttrDict):
+                del(root[root_key]['inherit'])
+                root[root_key].rebase(base)
+            else:
+                root[root_key] = base
+
+    def _needs_inherit(self, conf_key):
+        conf = self[conf_key]
+        # loop over keys until all the inherits are gone
+        while True:
+            seen_inherit = False
+            for k, v in conf.flatten_dict(conf):
+                if k[-1] == 'inherit':
+                    # give back the keys needed to get to a dict containing an inherit key
+                    seen_inherit = True
+                    yield k[:-1]
+            if not seen_inherit:
+                break
 
     def _populate(self, key):
         yaml_dict = self._load_yaml(key)
@@ -173,6 +194,7 @@ class Config(dict):
                 msg = 'Unable to load configuration "{}"'.format(conf_key)
                 warn(msg, ConfigNotFound)
             return conf
+
 
 class ConfigTree(defaultdict):
     """A tree class that knows to clear the config when mutated
