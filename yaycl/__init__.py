@@ -164,9 +164,19 @@ class Config(dict):
                 yaml_dict.update_dict(local_yaml_dict)
 
         # Graft on the runtime overrides
-        yaml_dict.update(self.runtime.get(key, {}))
+        if key in self._runtime:
+            AttrDict(self._runtime)[key]._.apply_flat(
+                partial(self._apply_runtime_overrides, yaml_dict))
         self[key].update(yaml_dict)
         self._inherit(key)
+
+    def _apply_runtime_overrides(self, yaml_dict, keys, value):
+        base = yaml_dict
+        for key in keys[:-1]:
+            if key not in base:
+                base[key] = AttrDict()
+            base = base[key]
+        base[keys[-1]] = value
 
     def clear(self):
         # because of the 'from conf import foo' mechanism, we need to clear each key in-place,

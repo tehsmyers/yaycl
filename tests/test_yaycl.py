@@ -1,9 +1,8 @@
-import importlib
 import os
 import random
 import string
 import sys
-from warnings import catch_warnings, resetwarnings
+from warnings import resetwarnings
 
 import pytest
 from lya import AttrDict
@@ -71,6 +70,7 @@ def conf_dir(request):
 def conf(conf_dir):
     return yaycl.Config(conf_dir.strpath)
 
+
 def create_test_yaml(request, conf, contents, filename, local=False):
     if local:
         suffix = '.local.yaml'
@@ -93,6 +93,7 @@ def create_test_yaml(request, conf, contents, filename, local=False):
 def delete_path(path):
     if path.check():
         path.remove()
+
 
 def test_conf_basics(test_yaml, conf):
     # Dict lookup method works
@@ -124,7 +125,7 @@ def test_conf_yamls_attr(test_yaml, conf):
 def test_conf_yamls_save(request, test_yaml, conf):
     save_test = conf_dir(request).join('{}.yaml'.format('save_test'))
     request.addfinalizer(lambda: delete_path(save_test))
-    create_test_yaml(request, conf, local_test_yaml_contents, test_yaml)
+    create_test_yaml(request, conf, test_yaml_contents, test_yaml)
 
     assert not save_test.check()
     conf['save_test'].update(conf[test_yaml])
@@ -189,6 +190,36 @@ def test_conf_runtime_update(random_string, conf):
     # In addition to direct nested assignment, dict update should also work
     conf.runtime.update({'test_config': {random_string: True}})
     assert random_string in conf.test_config
+
+
+def test_conf_runtime_override_retains_keys(request, test_yaml, random_string, conf):
+    # In addition to direct nested assignment, dict update should also work
+    create_test_yaml(request, conf, test_yaml_contents, test_yaml)
+    conf.runtime[test_yaml] = {
+        'nested_test_root': {
+            random_string: True
+        }
+    }
+
+    # Our override key exists
+    assert conf[test_yaml]['nested_test_root'][random_string]
+    # but existing keys are still there
+    assert 'nested_test_key_1' in conf[test_yaml]['nested_test_root']
+
+
+def test_conf_runtime(request, test_yaml, random_string, conf):
+    # In addition to direct nested assignment, dict update should also work
+    create_test_yaml(request, conf, test_yaml_contents, test_yaml)
+    conf.runtime[test_yaml] = {
+        'nested_test_root': {
+            'nonexistent_key': {
+                random_string: True
+            }
+        }
+    }
+
+    # runtime overrides for keys that don't exist should be created
+    assert conf[test_yaml]['nested_test_root']['nonexistent_key'][random_string]
 
 
 def test_conf_runtime_clear(test_yaml, random_string, conf):
