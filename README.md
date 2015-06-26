@@ -1,7 +1,7 @@
 # YAYCL: YAML Configuration loader and cache
 
 All YAML files stored in the given directory are automatically parsed and loaded on request.
-The parsed files are exposed as object attributes based on the yaml file name.
+The parsed files are exposed as object attributes based on the yaml file name. 
 
 For example, consider a ``conf/config.yaml`` file:
 
@@ -31,6 +31,8 @@ or a single config file's cache can be cleared:
 conf.clear()  # clears the entire cache
 conf.config.clear() or conf['config'].clear()  # clears the cache only for config.yaml
 ```
+
+Note that, as in the example above, yaml files loaded by yaycl (currently) must be a mapping type at the top level. Files containing more than one yaml document are (currently) unsupported.
 
 ## Module Impersonation
 
@@ -153,9 +155,9 @@ package. As such, all methods normally available to AttrDicts are available here
 For example, `Config.save` and `Config`'s inheritance abilities rely on `AttrDict`'s
 `dump` and `rebase` methods, respectively.
 
-Of course, since `AttrDict is a `dict` subclass, dictionary methods can also be used to
-manipulate a `yaycl.Config` at runtime. The `dict.clear` method is particularly
-useful as a means to trigger a reload of all config files.
+Of course, since `AttrDict` is a `dict` subclass, dictionary methods can also be used to
+manipulate a `yaycl.Config` at runtime. The `clear` method is particularly
+useful as a means to trigger a reload of all config files by clearing yaycl's cache.
 
 # Thread safety
 
