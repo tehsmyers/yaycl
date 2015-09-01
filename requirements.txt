@@ -1,2 +1,2 @@
-layered-yaml-attrdict-config
+layered-yaml-attrdict-config==15.8.0
 wheel
