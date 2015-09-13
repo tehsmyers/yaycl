@@ -34,6 +34,19 @@ conf.config.clear() or conf['config'].clear()  # clears the cache only for confi
 
 Note that, as in the example above, yaml files loaded by yaycl (currently) must be a mapping type at the top level. Files containing more than one yaml document are (currently) unsupported.
 
+## .yaml vs. .yml
+
+Many projects use the `.yml` file extension for YAML files. This is supported by passing the
+`extension` keyword argument to `yaycl.Config`. For this example, assume `conf/config.yaml`
+has been renamed to `conf/config.yml`:
+
+```python
+import yaycl
+conf = yaycl.Config('conf', extension='.yml')
+# Now this config will be loaded from conf/config.yml
+assert 'key2' in conf.config.dict_key
+```
+
 ## Module Impersonation
 
 `yaycl.Config` is indended to manage config files for an entire project. To facilitate

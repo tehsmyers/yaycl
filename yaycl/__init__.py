@@ -27,8 +27,9 @@ class Config(dict):
     def __init__(self, config_dir, **kwargs):
         # private yaycl conf, plugins can stash info here for configuration
         self._yaycl = AttrDict({'config_dir': config_dir})
-        self._yaycl.update(kwargs)
         self._runtime = ConfigTree(self)
+        self._extension = kwargs.pop('extension', '.yaml')
+        self._yaycl.update(kwargs)
 
     def _runtime_overrides(self):
         return self._runtime
@@ -159,7 +160,7 @@ class Config(dict):
         # Graft in local yaml updates if they're available
         with catch_warnings():
             local_yaml = '%s.local' % key
-            local_yaml_dict = load_yaml(self, local_yaml, warn_on_fail=False)
+            local_yaml_dict = self._load_yaml(local_yaml, warn_on_fail=False)
             if local_yaml_dict:
                 yaml_dict.update_dict(local_yaml_dict)
 
@@ -188,22 +189,32 @@ class Config(dict):
             self._populate(key)
 
     def _load_yaml(self, conf_key, warn_on_fail=True):
-        # sort the default loader last
-        # return the first conf loader that succeeds,
-        # otherwise return the last conf that was loaded
-        for ep in sorted(iter_entry_points('yaycl.load_yaml'),
-                key=lambda ep: ep.name == 'default'):
-            loader = ep.load()
-            conf = loader(self, conf_key, warn)
-            if conf:
-                return conf
-        else:
-            # Since we put default last, the last conf loaded will
-            # an empty AttrDict; warn and return
-            if warn_on_fail:
-                msg = 'Unable to load configuration "{}"'.format(conf_key)
-                warn(msg, ConfigNotFound)
+        return config_file(self.file_path(conf_key), warn_on_fail=warn_on_fail, **self._yaycl)
+
+    def file_path(self, conf_key):
+        file_name = '{}{}'.format(conf_key, self._extension)
+        return os.path.join(self._yaycl.config_dir, file_name)
+
+
+def config_file(file_path, **options):
+    # go through entry points, sort the default loader last
+    # return the first conf loader that succeeds,
+    # otherwise return the last conf that was loaded
+    for ep in sorted(iter_entry_points('yaycl.load_yaml'),
+            key=lambda ep: ep.name == 'default'):
+        loader = ep.load()
+        conf = loader(file_path, **options)
+        if conf:
             return conf
+    else:
+        # Since we put default last, the last conf loaded will
+        # an empty AttrDict; warn and return
+        if options.get('warn_on_fail'):
+            msg = 'Unable to load configuration "{}"'.format(file_path)
+            warn(msg, ConfigNotFound)
+        # The default loader will always return a conf, even if it's empty,
+        # so that's what's being returned here
+        return conf
 
 
 class ConfigTree(defaultdict):
@@ -247,10 +258,8 @@ class ConfigTree(defaultdict):
             self._conf.clear()
 
 
-def load_yaml(conf, conf_key, warn_on_fail=True):
+def load_yaml(filename, **options):
     loaded_yaml = AttrDict()
-
-    filename = os.path.join(conf._yaycl.config_dir, '{}.yaml'.format(conf_key))
 
     # Find the requested yaml in the yaml dir
     if os.path.exists(filename):
@@ -261,4 +270,3 @@ def load_yaml(conf, conf_key, warn_on_fail=True):
                 warn('Unable to parse configuration file at {}'.format(filename), ConfigInvalid)
 
     return loaded_yaml
-
